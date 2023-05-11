@@ -7,6 +7,8 @@ library(data.table)
 
 icustays <- fread("path/to/icustays.csv", header=T, fill=T)
 labevents <- fread("path/to/labevents.csv", header=T, fill=T)
+names(icustays)<-tolower(names(icustays))
+names(labevents)<-tolower(names(labevents))
 
 labels <- tribble(
   ~itemid, ~label,

@@ -13,8 +13,6 @@ names(diagnoses_icd) <- tolower(names(diagnoses_icd))
 names(procedures_icd) <- tolower(names(procedures_icd))
 names(admissions) <- tolower(names(admissions))
 
-
-
 # 筛选出具有心血管疾病的患者
 cardiovascular_patients <- diagnoses_icd %>%
   filter(substring(icd9_code, 1, 3) %in% c('390', '391', '392', '393', '394', '395',
