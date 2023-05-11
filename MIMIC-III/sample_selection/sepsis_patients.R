@@ -3,15 +3,19 @@
 # 它将SQL代码中的每个子查询转换为一个dplyr管道中的步骤，并使用left_join()函数将它们连接起来。
 # 最后，它使用mutate()和case_when()函数计算出Angus标准的结果，并将结果存储在一个名为angus_sepsis的数据框中。
 
-setwd("./MIMIC-III")
+setwd("/home/luojiawei/mimic3")
 
 library(data.table)
 library(dplyr)
 
 # 读入数据
-diagnoses_icd <- fread("./data/diagnoses_icd.csv", header=T, fill=T)
-procedures_icd <- fread("./data/procedures_icd.csv", header=T, fill=T)
-admissions <- fread("./data/admissions.csv", header=T, fill=T)
+diagnoses_icd <- fread("./mimic3_data/diagnoses_icd.csv", header=T, fill=T)
+procedures_icd <- fread("./mimic3_data/procedures_icd.csv", header=T, fill=T)
+admissions <- fread("./mimic3_data/admissions.csv", header=T, fill=T)
+
+names(diagnoses_icd) <- tolower(names(diagnoses_icd))
+names(procedures_icd) <- tolower(names(procedures_icd))
+names(admissions) <- tolower(names(admissions))
 
 # 生成判断 sepsis 的一些辅助表格
 infection_group <- diagnoses_icd %>%
@@ -30,7 +34,8 @@ infection_group <- diagnoses_icd %>%
                                       '7907', '9966', '9985', '9993')) ~ 1, 
     (substring(icd9_code, 1, 5) %in% c('49121', '56201', '56203', '56211', '56213', '56983')) ~ 1, 
     TRUE ~ 0)) %>%
-  select(subject_id, hadm_id, infection)
+  select(subject_id, hadm_id, infection) %>% 
+  distinct(subject_id, hadm_id, .keep_all = TRUE)
 
 organ_diag_group <- diagnoses_icd %>%
   mutate(organ_dysfunction = case_when(
@@ -40,23 +45,22 @@ organ_diag_group <- diagnoses_icd %>%
     explicit_sepsis = case_when(
       (substring(icd9_code, 1, 5) %in% c('99592', '78552')) ~ 1, 
       TRUE ~ 0)) %>%
-  select(subject_id, hadm_id, organ_dysfunction, explicit_sepsis)
+  select(subject_id, hadm_id, organ_dysfunction, explicit_sepsis) %>% 
+  distinct(subject_id, hadm_id, .keep_all = TRUE)
 
 organ_proc_group <- procedures_icd %>%
   mutate(mech_vent = case_when(
     (substring(icd9_code, 1, 4) %in% c('9670', '9671', '9672')) ~ 1, 
     TRUE ~ 0)) %>%
-  select(subject_id, hadm_id, mech_vent)
+  select(subject_id, hadm_id, mech_vent)  %>% 
+  distinct(subject_id, hadm_id, .keep_all = TRUE)
 
 aggregate <- admissions %>%
   left_join(infection_group, by = c('subject_id', 'hadm_id')) %>%
   left_join(organ_diag_group, by = c('subject_id', 'hadm_id')) %>%
   left_join(organ_proc_group, by = c('subject_id', 'hadm_id')) %>%
-  mutate(infection = if_else(!is.na(infection), 1, 0), 
-         explicit_sepsis = if_else(!is.na(explicit_sepsis), 1, 0), 
-         organ_dysfunction = if_else(!is.na(organ_dysfunction), 1, 0), 
-         mech_vent = if_else(!is.na(mech_vent), 1, 0)) %>%
-  select(subject_id, hadm_id, infection, explicit_sepsis, organ_dysfunction, mech_vent)
+  select(subject_id, hadm_id, infection, explicit_sepsis, organ_dysfunction, mech_vent)  %>% 
+  distinct(subject_id, hadm_id, .keep_all = TRUE)
 
 
 # 标记 sepsis 的样本
@@ -66,6 +70,12 @@ angus_sepsis <- aggregate %>%
     (infection == 1 & organ_dysfunction == 1) ~ 1, 
     (infection == 1 & mech_vent == 1) ~ 1, 
     TRUE ~ 0)) %>%
-  select(subject_id, hadm_id, infection, explicit_sepsis, organ_dysfunction, mech_vent, angus)
+  select(subject_id, hadm_id, infection, explicit_sepsis, organ_dysfunction, mech_vent, angus) %>% 
+  distinct(subject_id, hadm_id, .keep_all = TRUE)
 
 fwrite(angus_sepsis, "./data/angus_sepsis.csv", row.names = F)
+
+
+angus_sepsis %>%
+  filter(angus == 1) %>%
+  slice_head(n = 10) 
